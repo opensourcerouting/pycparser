@@ -9,9 +9,10 @@ class MermaidGenerator(object):
     """
 
     class H:
-        def __init__(self, content, children=[]):
+        def __init__(self, content, children=[], else_children=[]):
             self.content = content
             self.children = list(children)
+            self.else_children = list(else_children)
 
     def __init__(self):
         # Statements start with indentation of self.indent_level spaces, using
@@ -22,6 +23,11 @@ class MermaidGenerator(object):
         self.stmt_seq = 0
         self.call_tree = self.H("root")
         self.nested_node_hold = False
+        self.is_else = False
+
+    def get_call_tree(self, ast):
+        self.visit(ast)
+        return self.call_tree
 
     def _make_indent(self):
         return ' ' * self.indent_level
@@ -252,7 +258,7 @@ class MermaidGenerator(object):
     def visit_Return(self, n):
         s = 'return'
         if n.expr: s += ' ' + self.visit(n.expr)
-        s = s + ';'
+        #s = s + ';'
         s = self._make_node(n, s)
         return s
 
@@ -280,10 +286,16 @@ class MermaidGenerator(object):
         s += ')'  # \n'
         self.nested_node_hold = last_hold_status
         s = self._make_node(n, s)
-        if_seq = self._make_seq(n)
+        #if_seq = self._make_seq(n)
+        self.indent_level += 1
+        self._make_node(n, "If-True")
         s += self._generate_stmt(n.iftrue, add_indent=True)
+        self.indent_level -= 1
         if n.iffalse:
+            self.indent_level += 1
+            self._make_node(n, "If-False")
             s += self._generate_stmt(n.iffalse, add_indent=True)
+            self.indent_level -= 1
         return s
 
     def visit_For(self, n):
