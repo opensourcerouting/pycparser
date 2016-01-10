@@ -1,4 +1,5 @@
 from . import c_ast
+import html
 
 class MermaidGenerator(object):
     """ Uses the same visitor pattern as c_ast.NodeVisitor, but modified to
@@ -20,7 +21,7 @@ class MermaidGenerator(object):
         return 'node_' + node.__class__.__name__ + '_' + str(self.stmt_seq)
 
     def _make_node(self, node, content, surround='[]'):
-        return self._make_seq(node) + surround[0] + "\"" + content + "\"" + surround[1] + '\n';
+        return self._make_seq(node) + surround[0] + "\"" + html.escape(content) + "\"" + surround[1] + '\n';
 
     def _push_call_stack(self, node):
         self.call_stack.append(node)
