@@ -15,7 +15,8 @@ class MermaidGenerator(object):
         self.indent_level = 0
         self.stmt_seq = 0
         self.call_stack = []
-        self.decl_node_hold = False
+        self.visit_stack = []
+        self.nested_node_hold = False
 
     def _make_indent(self):
         return ' ' * self.indent_level
@@ -24,7 +25,7 @@ class MermaidGenerator(object):
         return 'node_' + node.__class__.__name__ + '_' + str(self.stmt_seq)
 
     def _make_node(self, node, content, surround='[]'):
-        if self.decl_node_hold:
+        if self.nested_node_hold:
             return content
         else:
             return self._make_seq(node) + surround[0] + "\"" + html.escape(content.replace('\n', '')) + "\"" + surround[
@@ -38,6 +39,7 @@ class MermaidGenerator(object):
 
     def visit(self, node):
         self.stmt_seq += 1
+        self.visit_stack.append(node)
         method = 'visit_' + node.__class__.__name__
         return getattr(self, method, self.generic_visit)(node)
 
@@ -117,30 +119,22 @@ class MermaidGenerator(object):
         else:
             return self.visit(n)
 
-    def visit_Decl(self, n, no_type=False, nested=False):
+    def visit_Decl(self, n, no_type=False):
         # no_type is used when a Decl is part of a DeclList, where the type is
         # explicitly only for the first declaration in a list.
         #
-        node_hold = self.decl_node_hold
-        if nested:
-            self.decl_node_hold = True
-        if no_type:
-            s = n.name
-        else:
-            s = self._generate_decl(n)
+        s = n.name if no_type else self._generate_decl(n)
         if n.bitsize: s += ' : ' + self.visit(n.bitsize)
         if n.init:
             s += ' = ' + self._visit_expr(n.init)
         s = self._make_node(n, s)
-        if not nested:
-            self.decl_node_hold = node_hold
         return s
 
     def visit_DeclList(self, n):
         s = self.visit(n.decls[0])
         if len(n.decls) > 1:
             s += ', ' + ', '.join(self.visit_Decl(decl, no_type=True)
-                                    for decl in n.decls[1:])
+                                  for decl in n.decls[1:])
         return s
 
     def visit_Typedef(self, n):
@@ -180,17 +174,16 @@ class MermaidGenerator(object):
         return s
 
     def visit_FuncDef(self, n):
-        self.decl_node_hold = True
+        self.nested_node_hold = True
         decl = self.visit_Decl(n.decl)
-        self.decl_node_hold = False
-        decl = self._make_node(n, decl)
+        self.nested_node_hold = False
         self.indent_level = 0
         body = self.visit(n.body)
         if n.param_decls:
             knrdecls = ';\n'.join(self.visit(p) for p in n.param_decls)
-            return decl + '\n' + knrdecls + ';\n' + body + '\n'
+            return self._make_node(n, decl + knrdecls) + body + '\n'
         else:
-            return decl + '\n' + body + '\n'
+            return self._make_node(n, decl) + body + '\n'
 
     def visit_FileAST(self, n):
         s = ''
@@ -227,10 +220,14 @@ class MermaidGenerator(object):
         return s
 
     def visit_Break(self, n):
-        return 'break;'
+        s = 'break;'
+        s = self._make_node(n, s)
+        return s
 
     def visit_Continue(self, n):
-        return 'continue;'
+        s = 'continue;'
+        s = self._make_node(n, s)
+        return s
 
     def visit_TernaryOp(self, n):
         s = self._visit_expr(n.cond) + ' ? '
@@ -243,12 +240,16 @@ class MermaidGenerator(object):
         if n.cond: s += self.visit(n.cond)
         s += ')'  # \n'
         s = self._make_node(n, s)
-        s += self._make_seq(n) + " -- true --> "
+        if_seq = self._make_seq(n)
+        #if_end_seq = if_seq + "_end"
+        #s += if_seq + " -- true --> "
         s += self._generate_stmt(n.iftrue, add_indent=True)
+        #s += " --> " + if_end_seq
         if n.iffalse:
-            s += self._make_seq(n) + " -- false --> "
-            s += self._make_indent() + 'else\n'
+            #s += if_seq + " -- false --> "
+            #s += self._make_indent() + 'else\n'
             s += self._generate_stmt(n.iffalse, add_indent=True)
+            #s += " --> " + if_end_seq
         return s
 
     def visit_For(self, n):
@@ -267,13 +268,13 @@ class MermaidGenerator(object):
     def visit_While(self, n):
         s = 'while ('
         if n.cond: s += self.visit(n.cond)
-        s += ')\n'
+        s += ')' # \n'
         s = self._make_node(n, s)
         s += self._generate_stmt(n.stmt, add_indent=True)
         return s
 
     def visit_DoWhile(self, n):
-        s = 'do\n'
+        s = 'do' # \n'
         s = self._make_node(n, s)
         s += self._generate_stmt(n.stmt, add_indent=True)
         swhile = self._make_indent() + 'while ('
@@ -284,27 +285,28 @@ class MermaidGenerator(object):
         return s
 
     def visit_Switch(self, n):
-        s = 'switch (' + self.visit(n.cond) + ')\n'
+        s = 'switch (' + self.visit(n.cond) + ')' # \n'
         s = self._make_node(n, s)
         s += self._generate_stmt(n.stmt, add_indent=True)
         return s
 
     def visit_Case(self, n):
-        s = 'case ' + self.visit(n.expr) + ':\n'
+        s = 'case ' + self.visit(n.expr) + ':' # \n'
         s = self._make_node(n, s)
         for stmt in n.stmts:
             s += self._generate_stmt(stmt, add_indent=True)
         return s
 
     def visit_Default(self, n):
-        s = 'default:\n'
+        s = 'default:' # \n'
         s = self._make_node(n, s)
         for stmt in n.stmts:
             s += self._generate_stmt(stmt, add_indent=True)
         return s
 
     def visit_Label(self, n):
-        s = n.name + ':\n' + self._generate_stmt(n.stmt)
+        s = n.name + ':' # \n'
+        s += self._generate_stmt(n.stmt)
         s = self._make_node(n, s)
         return s
 
@@ -347,17 +349,17 @@ class MermaidGenerator(object):
         """
         s = name + ' ' + (n.name or '')
         if n.decls:
-            s += '\n'
+            #s += '\n'
             s += self._make_indent()
             self.indent_level += 2
-            s += '{\n'
+            s += '{' #\n'
             for decl in n.decls:
                 s += self._generate_stmt(decl)
             self.indent_level -= 2
             s += self._make_indent() + '}'
         return s
 
-    def _generate_stmt(self, n, add_indent=False, cond=''):
+    def _generate_stmt(self, n, add_indent=False):
         """ Generation from a statement node. This method exists as a wrapper
             for individual visit_* methods to handle different treatment of
             some statements in this context.
@@ -375,7 +377,7 @@ class MermaidGenerator(object):
             # These can also appear in an expression context so no semicolon
             # is added to them automatically
             #
-            return indent + self.visit(n)  # + ';\n'
+            return indent + self.visit(n)# + '\n'   # + ';\n'
         elif typ in (c_ast.Compound,):
             # No extra indentation required before the opening brace of a
             # compound - because it consists of multiple lines it has to
@@ -383,7 +385,7 @@ class MermaidGenerator(object):
             #
             return self.visit(n)
         else:
-            return indent + self.visit(n)  # + '\n'
+            return indent + self.visit(n)# + '\n'  # + '\n'
 
     def _generate_decl(self, n):
         """ Generation from a Decl node.
@@ -394,7 +396,7 @@ class MermaidGenerator(object):
         s += self._generate_type(n.type)
         return s
 
-    def _generate_type(self, n, modifiers=[], no_nested_node=False):
+    def _generate_type(self, n, modifiers=[]):
         """ Recursive generation from a type node. n is the type node.
             modifiers collects the PtrDecl, ArrayDecl and FuncDecl modifiers
             encountered on the way down to a TypeDecl, to allow proper
