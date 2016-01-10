@@ -12,9 +12,10 @@ __version__ = '2.14'
 
 from subprocess import Popen, PIPE
 from .c_parser import CParser
+import os
 
 
-def preprocess_file(filename, cpp_path='cpp', cpp_args=''):
+def preprocess_file(filename, cpp_path='cpp', cpp_args='', clean=True, clean_comments=True, clean_macros=False):
     """ Preprocess a file using cpp.
 
         filename:
@@ -28,12 +29,22 @@ def preprocess_file(filename, cpp_path='cpp', cpp_args=''):
         When successful, returns the preprocessed file's contents.
         Errors from cpp will be printed out.
     """
+    if (clean):
+        with open(filename, 'rU') as f:
+            text = f.read()
+            text = clean_code(text, comments=clean_comments, macros=clean_macros)
+            filename2 = filename + ".pp.c"
+            with open(filename2, "w") as output:
+                output.write(text)
+    else:
+        filename2 = filename
+
     path_list = [cpp_path]
     if isinstance(cpp_args, list):
         path_list += cpp_args
     elif cpp_args != '':
         path_list += [cpp_args]
-    path_list += [filename]
+    path_list += [filename2]
 
     try:
         # Note the use of universal_newlines to treat all newlines
@@ -48,11 +59,12 @@ def preprocess_file(filename, cpp_path='cpp', cpp_args=''):
             'Make sure its path was passed correctly\n' +
             ('Original error: %s' % e))
 
+    os.remove(filename2)
     return text
 
 
 def parse_file(filename, use_cpp=False, cpp_path='cpp', cpp_args='',
-               parser=None):
+               parser=None, clean_code=True, clean_comments=True, clean_macros=False):
     """ Parse a C file using pycparser.
 
         filename:
@@ -83,11 +95,12 @@ def parse_file(filename, use_cpp=False, cpp_path='cpp', cpp_args='',
         Errors from cpp will be printed out.
     """
     if use_cpp:
-        text = preprocess_file(filename, cpp_path, cpp_args)
+        text = preprocess_file(filename, cpp_path, cpp_args, clean=clean_code, clean_comments=clean_comments, clean_macros=clean_macros)
     else:
         with open(filename, 'rU') as f:
             text = f.read()
-
+            if (clean_code):
+                text = clean_code(text, comments=clean_comments, macros=clean_macros);
     if parser is None:
         parser = CParser()
     return parser.parse(text, filename)
@@ -115,7 +128,7 @@ def clean_code(code, comments=True, macros=False):
                 lines[i] = ''
                 in_macro = l.endswith('\\')
         code = '\n'.join(lines)
-    
+
     if comments:
         idx = 0
         comment_start = None
@@ -131,5 +144,5 @@ def clean_code(code, comments=True, macros=False):
                 idx -= idx - comment_start
                 comment_start = None
             idx += 1
-    
+
     return code
