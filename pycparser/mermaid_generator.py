@@ -1,11 +1,13 @@
 from . import c_ast
 import html
 
+
 class MermaidGenerator(object):
     """ Uses the same visitor pattern as c_ast.NodeVisitor, but modified to
         return a value from each visit method, using string accumulation in
         generic_visit.
     """
+
     def __init__(self):
         # Statements start with indentation of self.indent_level spaces, using
         # the _make_indent method
@@ -25,7 +27,8 @@ class MermaidGenerator(object):
         if self.decl_node_hold:
             return content
         else:
-            return self._make_seq(node) + surround[0] + "\"" + html.escape(content) + "\"" + surround[1] + '\n';
+            return self._make_seq(node) + surround[0] + "\"" + html.escape(content.replace('\n', '')) + "\"" + surround[
+                1] + '\n';
 
     def _push_call_stack(self, node):
         self.call_stack.append(node)
@@ -39,7 +42,7 @@ class MermaidGenerator(object):
         return getattr(self, method, self.generic_visit)(node)
 
     def generic_visit(self, node):
-        #print('generic:', type(node))
+        # ~ print('generic:', type(node))
         if node is None:
             return ''
         else:
@@ -52,7 +55,10 @@ class MermaidGenerator(object):
         return n.name
 
     def visit_Pragma(self, n):
-        return ''
+        ret = '#pragma'
+        if n.string:
+            ret += ' ' + n.string
+        return ret
 
     def visit_ArrayRef(self, n):
         arrref = self._parenthesize_unless_simple(n.name)
@@ -64,34 +70,41 @@ class MermaidGenerator(object):
 
     def visit_FuncCall(self, n):
         fref = self._parenthesize_unless_simple(n.name)
-        ret = fref + '(' + self.visit(n.args) + ')'
-        return self._make_node(n, ret)
+        s = fref + '(' + self.visit(n.args) + ')'
+        s = self._make_node(n, s)
+        return s
 
     def visit_UnaryOp(self, n):
         operand = self._parenthesize_unless_simple(n.expr)
         if n.op == 'p++':
-            return '%s++' % operand
+            s = '%s++' % operand
         elif n.op == 'p--':
-            return '%s--' % operand
+            s = '%s--' % operand
         elif n.op == 'sizeof':
             # Always parenthesize the argument of sizeof since it can be
             # a name.
-            return 'sizeof(%s)' % self.visit(n.expr)
+            s = 'sizeof(%s)' % self.visit(n.expr)
         else:
-            return '%s%s' % (n.op, operand)
+            s = '%s%s' % (n.op, operand)
+        s = self._make_node(n, s)
+        return s
 
     def visit_BinaryOp(self, n):
         lval_str = self._parenthesize_if(n.left,
-                            lambda d: not self._is_simple_node(d))
+                                         lambda d: not self._is_simple_node(d))
         rval_str = self._parenthesize_if(n.right,
-                            lambda d: not self._is_simple_node(d))
-        return '%s %s %s' % (lval_str, n.op, rval_str)
+                                         lambda d: not self._is_simple_node(d))
+        s = '%s %s %s' % (lval_str, n.op, rval_str)
+        s = self._make_node(n, s)
+        return s
 
     def visit_Assignment(self, n):
         rval_str = self._parenthesize_if(
-                            n.rvalue,
-                            lambda n: isinstance(n, c_ast.Assignment))
-        return self._make_node(n, '%s %s %s' % (self.visit(n.lvalue), n.op, rval_str))
+                n.rvalue,
+                lambda n: isinstance(n, c_ast.Assignment))
+        s = '%s %s %s' % (self.visit(n.lvalue), n.op, rval_str)
+        s = self._make_node(n, s)
+        return s
 
     def visit_IdentifierType(self, n):
         return ' '.join(n.names)
@@ -131,7 +144,10 @@ class MermaidGenerator(object):
         return s
 
     def visit_Typedef(self, n):
-        return ''
+        s = ''
+        if n.storage: s += ' '.join(n.storage) + ' '
+        s += self._generate_type(n.type)
+        return s
 
     def visit_Cast(self, n):
         s = '(' + self._generate_type(n.to_type) + ')'
@@ -184,20 +200,21 @@ class MermaidGenerator(object):
             elif isinstance(ext, c_ast.Pragma):
                 s += self.visit(ext) + '\n'
             else:
-                s += self.visit(ext) # + ';\n' # here are all the typedef's
+                pass
+                #s += self.visit(ext) + ';\n' # here are all typedef's
         return s
 
     def visit_Compound(self, n):
-        s = self._make_indent() #+ '{\n'
+        s = self._make_indent()  # + '{\n'
         self.indent_level += 2
         if n.block_items:
             s += ''.join(self._generate_stmt(stmt) for stmt in n.block_items)
         self.indent_level -= 2
-        s += self._make_indent() #+ '}\n'
+        s += self._make_indent()  # + '}\n'
         return s
 
     def visit_EmptyStatement(self, n):
-        return ';'
+        return ''  # ';'
 
     def visit_ParamList(self, n):
         return ', '.join(self.visit(param) for param in n.params)
@@ -205,13 +222,15 @@ class MermaidGenerator(object):
     def visit_Return(self, n):
         s = 'return'
         if n.expr: s += ' ' + self.visit(n.expr)
-        return self._make_node(n, s);
+        s = s + ';'
+        s = self._make_node(n, s)
+        return s
 
     def visit_Break(self, n):
-        return self._make_node(n, 'break')
+        return 'break;'
 
     def visit_Continue(self, n):
-        return self._make_node(n, 'continue')
+        return 'continue;'
 
     def visit_TernaryOp(self, n):
         s = self._visit_expr(n.cond) + ' ? '
@@ -222,12 +241,14 @@ class MermaidGenerator(object):
     def visit_If(self, n):
         s = 'if ('
         if n.cond: s += self.visit(n.cond)
-        s += ')' #\n'
+        s += ')'  # \n'
         s = self._make_node(n, s)
-        s += self._generate_stmt(n.iftrue, add_indent=True, cond="True")
+        s += self._make_seq(n) + " -- true --> "
+        s += self._generate_stmt(n.iftrue, add_indent=True)
         if n.iffalse:
-            s += self._make_indent()# + 'else\n'
-            s += self._generate_stmt(n.iffalse, add_indent=True, cond="False")
+            s += self._make_seq(n) + " -- false --> "
+            s += self._make_indent() + 'else\n'
+            s += self._generate_stmt(n.iffalse, add_indent=True)
         return s
 
     def visit_For(self, n):
@@ -237,49 +258,60 @@ class MermaidGenerator(object):
         if n.cond: s += ' ' + self.visit(n.cond)
         s += ';'
         if n.next: s += ' ' + self.visit(n.next)
-        s += ')'
+        s += ')'  # \n'
         s = self._make_node(n, s)
         s += self._generate_stmt(n.stmt, add_indent=True)
+        # TODO: break for statements
         return s
 
     def visit_While(self, n):
         s = 'while ('
         if n.cond: s += self.visit(n.cond)
-        s += ')'
+        s += ')\n'
         s = self._make_node(n, s)
         s += self._generate_stmt(n.stmt, add_indent=True)
         return s
 
     def visit_DoWhile(self, n):
         s = 'do\n'
+        s = self._make_node(n, s)
         s += self._generate_stmt(n.stmt, add_indent=True)
-        s += self._make_indent() + 'while ('
-        if n.cond: s += self.visit(n.cond)
-        s += ');'
+        swhile = self._make_indent() + 'while ('
+        if n.cond: swhile += self.visit(n.cond)
+        swhile += ');'
+        swhile = self._make_node(n, swhile)
+        s += swhile
         return s
 
     def visit_Switch(self, n):
         s = 'switch (' + self.visit(n.cond) + ')\n'
+        s = self._make_node(n, s)
         s += self._generate_stmt(n.stmt, add_indent=True)
         return s
 
     def visit_Case(self, n):
         s = 'case ' + self.visit(n.expr) + ':\n'
+        s = self._make_node(n, s)
         for stmt in n.stmts:
             s += self._generate_stmt(stmt, add_indent=True)
         return s
 
     def visit_Default(self, n):
         s = 'default:\n'
+        s = self._make_node(n, s)
         for stmt in n.stmts:
             s += self._generate_stmt(stmt, add_indent=True)
         return s
 
     def visit_Label(self, n):
-        return n.name + ':\n' + self._generate_stmt(n.stmt)
+        s = n.name + ':\n' + self._generate_stmt(n.stmt)
+        s = self._make_node(n, s)
+        return s
 
     def visit_Goto(self, n):
-        return 'goto ' + n.name + ';'
+        s = 'goto ' + n.name + ';'
+        s = self._make_node(n, s)
+        return s
 
     def visit_EllipsisParam(self, n):
         return '...'
@@ -343,25 +375,15 @@ class MermaidGenerator(object):
             # These can also appear in an expression context so no semicolon
             # is added to them automatically
             #
-            ret = self.visit(n)
-            # return \
-            #     ('-- %s -->' % cond) if cond != '' else '-->' + '\n' \
-            #     + indent + self._make_seq(n) + '[' + ret + ']\n'
-            return indent + ret;
+            return indent + self.visit(n)  # + ';\n'
         elif typ in (c_ast.Compound,):
             # No extra indentation required before the opening brace of a
             # compound - because it consists of multiple lines it has to
             # compute its own indentation.
             #
-            ret = self.visit(n)
-            # return ('-- %s -->' % cond) if cond != '' else '-->' + '\n'
-            return ret;
+            return self.visit(n)
         else:
-            ret = self.visit(n)
-            # return \
-            #     indent + self._make_seq(n) + '[' + ret + ']\n'
-            return indent + ret;
-
+            return indent + self.visit(n)  # + '\n'
 
     def _generate_decl(self, n):
         """ Generation from a Decl node.
@@ -372,14 +394,14 @@ class MermaidGenerator(object):
         s += self._generate_type(n.type)
         return s
 
-    def _generate_type(self, n, modifiers=[]):
+    def _generate_type(self, n, modifiers=[], no_nested_node=False):
         """ Recursive generation from a type node. n is the type node.
             modifiers collects the PtrDecl, ArrayDecl and FuncDecl modifiers
             encountered on the way down to a TypeDecl, to allow proper
             generation from it.
         """
         typ = type(n)
-        # print(n, modifiers)
+        # ~ print(n, modifiers)
 
         if typ == c_ast.TypeDecl:
             s = ''
@@ -437,5 +459,5 @@ class MermaidGenerator(object):
         """ Returns True for nodes that are "simple" - i.e. nodes that always
             have higher precedence than operators.
         """
-        return isinstance(n,(   c_ast.Constant, c_ast.ID, c_ast.ArrayRef,
-                                c_ast.StructRef, c_ast.FuncCall))
+        return isinstance(n, (c_ast.Constant, c_ast.ID, c_ast.ArrayRef,
+                              c_ast.StructRef, c_ast.FuncCall))
