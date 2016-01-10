@@ -25,11 +25,16 @@ class MermaidGenerator(object):
         return 'node_' + node.__class__.__name__ + '_' + str(self.stmt_seq)
 
     def _make_node(self, node, content, surround='[]'):
+        if not hasattr(self._make_node, "last_indent"):
+            self._make_node.last_indent = self.indent_level  # it doesn't exist yet, so initialize it
+
         if self.nested_node_hold:
-            return content
+            return content.replace('\n', '').strip()
         else:
-            return self._make_seq(node) + surround[0] + "\"" + html.escape(content.replace('\n', '')) + "\"" + surround[
-                1] + '\n';
+            s = self._make_seq(node) + surround[0] + "\"" + html.escape(content.replace('\n', '').strip()) + "\"" + surround[
+                1] + '\n'
+            if self._make_node.last_indent < indent_level
+                # TODO: make tree here
 
     def _push_call_stack(self, node):
         self.call_stack.append(node)
@@ -39,9 +44,9 @@ class MermaidGenerator(object):
 
     def visit(self, node):
         self.stmt_seq += 1
-        self.visit_stack.append(node)
         method = 'visit_' + node.__class__.__name__
-        return getattr(self, method, self.generic_visit)(node)
+        s = getattr(self, method, self.generic_visit)(node)
+        return s
 
     def generic_visit(self, node):
         # ~ print('generic:', type(node))
@@ -186,10 +191,10 @@ class MermaidGenerator(object):
             return self._make_node(n, decl) + body + '\n'
 
     def visit_FileAST(self, n):
-        s = ''
+        s = []
         for ext in n.ext:
             if isinstance(ext, c_ast.FuncDef):
-                s += self.visit(ext)
+                s.append(self.visit(ext))
             elif isinstance(ext, c_ast.Pragma):
                 pass
                 #s += self.visit(ext) + '\n' # kill all pragmas
