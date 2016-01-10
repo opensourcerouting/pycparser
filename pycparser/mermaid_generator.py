@@ -322,19 +322,23 @@ class MermaidGenerator(object):
             # These can also appear in an expression context so no semicolon
             # is added to them automatically
             #
+            #return ''
             return indent + self.visit(n) + ';\n'
         elif typ in (c_ast.Compound,):
             # No extra indentation required before the opening brace of a
             # compound - because it consists of multiple lines it has to
             # compute its own indentation.
             #
+            #return ''
             return self.visit(n)
         else:
+            return ''
             return indent + self.visit(n) + '\n'
 
     def _generate_decl(self, n):
         """ Generation from a Decl node.
         """
+
         s = ''
         if n.funcspec: s = ' '.join(n.funcspec) + ' '
         if n.storage: s += ' '.join(n.storage) + ' '
