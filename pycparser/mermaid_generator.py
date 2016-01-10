@@ -32,11 +32,11 @@ class MermaidGenerator(object):
             s = self._make_seq(node) + surround[0] + "\"" + html.escape(content.replace('\n', '').strip()) + "\"" + surround[
                 1] + '\n'
             pos = self.visit_stack;
-            for i in range(int(self.indent_level / 2)):
+            for i in range(int(self.indent_level / 2)-1):
                 if len(pos) == 0:
                     pos.append([])
                 if pos[-1] is not list:
-                    pos.append([])
+                    pos[-1] = [pos[-1]]
                 pos = pos[-1]
             pos.append(s)
             return s
@@ -191,16 +191,20 @@ class MermaidGenerator(object):
         return s
 
     def visit_FuncDef(self, n):
+        self.indent_level = 0
         self.nested_node_hold = True
         decl = self.visit(n.decl)
         self.nested_node_hold = False
-        self.indent_level = 0
-        body = self.visit(n.body)
+
         if n.param_decls:
             knrdecls = ';\n'.join(self.visit(p) for p in n.param_decls)
-            return self._make_node(n, decl + knrdecls) + body + '\n'
+            s = self._make_node(n, decl + knrdecls) # + body + '\n'
         else:
-            return self._make_node(n, decl) + body + '\n'
+            s = self._make_node(n, decl) # + body + '\n'
+        self.indent_level += 2
+        body = self.visit(n.body)
+        return s
+
 
     def visit_FileAST(self, n):
         #s = []
