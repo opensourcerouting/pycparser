@@ -101,7 +101,7 @@ class MermaidGenerator(object):
         else:
             s = '%s%s' % (n.op, operand)
         self.nested_node_hold = False
-        s = self._make_node(n, s)
+        #s = self._make_node(n, s)
         return s
 
     def visit_BinaryOp(self, n):
@@ -112,7 +112,7 @@ class MermaidGenerator(object):
                                          lambda d: not self._is_simple_node(d))
         s = '%s %s %s' % (lval_str, n.op, rval_str)
         self.nested_node_hold = False
-        s = self._make_node(n, s)
+        #s = self._make_node(n, s)
         return s
 
     def visit_Assignment(self, n):
