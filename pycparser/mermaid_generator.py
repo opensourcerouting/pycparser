@@ -13,6 +13,7 @@ class MermaidGenerator(object):
         self.indent_level = 0
         self.stmt_seq = 0
         self.call_stack = []
+        self.decl_node_hold = False
 
     def _make_indent(self):
         return ' ' * self.indent_level
@@ -21,7 +22,10 @@ class MermaidGenerator(object):
         return 'node_' + node.__class__.__name__ + '_' + str(self.stmt_seq)
 
     def _make_node(self, node, content, surround='[]'):
-        return self._make_seq(node) + surround[0] + "\"" + html.escape(content) + "\"" + surround[1] + '\n';
+        if self.decl_node_hold:
+            return content
+        else:
+            return self._make_seq(node) + surround[0] + "\"" + html.escape(content) + "\"" + surround[1] + '\n';
 
     def _push_call_stack(self, node):
         self.call_stack.append(node)
@@ -104,11 +108,15 @@ class MermaidGenerator(object):
         # no_type is used when a Decl is part of a DeclList, where the type is
         # explicitly only for the first declaration in a list.
         #
-        s = n.name if no_type else self._generate_decl(n)
+        if no_type:
+            s = n.name
+        else:
+            s = self._generate_decl(n)
         if n.bitsize: s += ' : ' + self.visit(n.bitsize)
         if n.init:
             s += ' = ' + self._visit_expr(n.init)
-        return self._make_node(n, s)
+        s = self._make_node(n, s)
+        return s
 
     def visit_DeclList(self, n):
         s = self.visit(n.decls[0])
@@ -151,7 +159,10 @@ class MermaidGenerator(object):
         return s
 
     def visit_FuncDef(self, n):
-        decl = self.visit(n.decl)
+        self.decl_node_hold = True
+        decl = self.visit_Decl(n.decl)
+        self.decl_node_hold = False
+        decl = self._make_node(n, decl)
         self.indent_level = 0
         body = self.visit(n.body)
         if n.param_decls:
@@ -350,7 +361,6 @@ class MermaidGenerator(object):
     def _generate_decl(self, n):
         """ Generation from a Decl node.
         """
-
         s = ''
         if n.funcspec: s = ' '.join(n.funcspec) + ' '
         if n.storage: s += ' '.join(n.storage) + ' '
