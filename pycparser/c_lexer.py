@@ -171,9 +171,11 @@ class CLexer(object):
         'ELLIPSIS',
 
         # pre-processor
-        'PPHASH',       # '#'
-        'PPPRAGMA',     # 'pragma'
-        'PPPRAGMASTR',
+        'PPHASH',      # '#'
+        
+        # atomic
+        'ATOMIC_SPECIFIER',
+        'ATOMIC_QUALIFIER',
     )
 
     ##
@@ -276,6 +278,7 @@ class CLexer(object):
 
     def t_ppline_NEWLINE(self, t):
         r'\n'
+
         if self.pp_line is None:
             self._error('line number missing in #line', t)
         else:
@@ -305,14 +308,15 @@ class CLexer(object):
 
     def t_pppragma_PPPRAGMA(self, t):
         r'pragma'
-        return t
+        pass
 
-    t_pppragma_ignore = ' \t'
+    t_pppragma_ignore = ' \t<>.-{}();=+-*/$%@&^~!?:,0123456789'
 
-    def t_pppragma_STR(self, t):
-        '.+'
-        t.type = 'PPPRAGMASTR'
-        return t
+    @TOKEN(string_literal)
+    def t_pppragma_STR(self, t): pass
+
+    @TOKEN(identifier)
+    def t_pppragma_ID(self, t): pass
 
     def t_pppragma_error(self, t):
         self._error('invalid #pragma directive', t)
@@ -474,9 +478,17 @@ class CLexer(object):
 
     @TOKEN(identifier)
     def t_ID(self, t):
-        t.type = self.keyword_map.get(t.value, "ID")
-        if t.type == 'ID' and self.type_lookup_func(t.value):
-            t.type = "TYPEID"
+        # The _Atomic keyword can be either a type specifier or qualifier, but
+        # it is only a specifier when followed by a left parenthesis.
+        if t.value == '_Atomic':
+            if self.lexer.clone().token().type == 'LPAREN':
+                t.type = "ATOMIC_SPECIFIER"
+            else:
+                t.type = "ATOMIC_QUALIFIER"
+        else:
+            t.type = self.keyword_map.get(t.value, "ID")
+            if t.type == 'ID' and self.type_lookup_func(t.value):
+                t.type = "TYPEID"
         return t
 
     def t_error(self, t):
