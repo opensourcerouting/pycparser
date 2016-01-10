@@ -104,10 +104,13 @@ class MermaidGenerator(object):
         else:
             return self.visit(n)
 
-    def visit_Decl(self, n, no_type=False):
+    def visit_Decl(self, n, no_type=False, nested=False):
         # no_type is used when a Decl is part of a DeclList, where the type is
         # explicitly only for the first declaration in a list.
         #
+        node_hold = self.decl_node_hold
+        if nested:
+            self.decl_node_hold = True
         if no_type:
             s = n.name
         else:
@@ -116,6 +119,8 @@ class MermaidGenerator(object):
         if n.init:
             s += ' = ' + self._visit_expr(n.init)
         s = self._make_node(n, s)
+        if not nested:
+            self.decl_node_hold = node_hold
         return s
 
     def visit_DeclList(self, n):
