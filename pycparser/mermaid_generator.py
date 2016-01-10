@@ -12,6 +12,7 @@ class MermaidGenerator(object):
         # Statements start with indentation of self.indent_level spaces, using
         # the _make_indent method
         #
+        self.last_indent = 0
         self.indent_level = 0
         self.stmt_seq = 0
         self.call_stack = []
@@ -25,16 +26,21 @@ class MermaidGenerator(object):
         return 'node_' + node.__class__.__name__ + '_' + str(self.stmt_seq)
 
     def _make_node(self, node, content, surround='[]'):
-        if not hasattr(self._make_node, "last_indent"):
-            self._make_node.last_indent = self.indent_level  # it doesn't exist yet, so initialize it
-
         if self.nested_node_hold:
             return content.replace('\n', '').strip()
         else:
             s = self._make_seq(node) + surround[0] + "\"" + html.escape(content.replace('\n', '').strip()) + "\"" + surround[
                 1] + '\n'
-            if self._make_node.last_indent < indent_level
-                # TODO: make tree here
+            pos = self.visit_stack;
+            for i in range(int(self.indent_level / 2)):
+                if len(pos) == 0:
+                    pos.append([])
+                if pos[-1] is not list:
+                    pos.append([])
+                pos = pos[-1]
+            pos.append(s)
+            return s
+
 
     def _push_call_stack(self, node):
         self.call_stack.append(node)
@@ -82,6 +88,7 @@ class MermaidGenerator(object):
         return s
 
     def visit_UnaryOp(self, n):
+        self.nested_node_hold = True
         operand = self._parenthesize_unless_simple(n.expr)
         if n.op == 'p++':
             s = '%s++' % operand
@@ -93,23 +100,28 @@ class MermaidGenerator(object):
             s = 'sizeof(%s)' % self.visit(n.expr)
         else:
             s = '%s%s' % (n.op, operand)
+        self.nested_node_hold = False
         s = self._make_node(n, s)
         return s
 
     def visit_BinaryOp(self, n):
+        self.nested_node_hold = True
         lval_str = self._parenthesize_if(n.left,
                                          lambda d: not self._is_simple_node(d))
         rval_str = self._parenthesize_if(n.right,
                                          lambda d: not self._is_simple_node(d))
         s = '%s %s %s' % (lval_str, n.op, rval_str)
+        self.nested_node_hold = False
         s = self._make_node(n, s)
         return s
 
     def visit_Assignment(self, n):
+        self.nested_node_hold = True
         rval_str = self._parenthesize_if(
                 n.rvalue,
                 lambda n: isinstance(n, c_ast.Assignment))
         s = '%s %s %s' % (self.visit(n.lvalue), n.op, rval_str)
+        self.nested_node_hold = False
         s = self._make_node(n, s)
         return s
 
@@ -180,7 +192,7 @@ class MermaidGenerator(object):
 
     def visit_FuncDef(self, n):
         self.nested_node_hold = True
-        decl = self.visit_Decl(n.decl)
+        decl = self.visit(n.decl)
         self.nested_node_hold = False
         self.indent_level = 0
         body = self.visit(n.body)
@@ -191,10 +203,12 @@ class MermaidGenerator(object):
             return self._make_node(n, decl) + body + '\n'
 
     def visit_FileAST(self, n):
-        s = []
+        #s = []
+        s = ""
         for ext in n.ext:
             if isinstance(ext, c_ast.FuncDef):
-                s.append(self.visit(ext))
+                #s.append(self.visit(ext))
+                s = self.visit(ext)
             elif isinstance(ext, c_ast.Pragma):
                 pass
                 #s += self.visit(ext) + '\n' # kill all pragmas
