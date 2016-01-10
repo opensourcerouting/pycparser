@@ -37,7 +37,7 @@ class MermaidGenerator(object):
                 1] + '\n'
 
             pos = self.call_tree
-            i = self.indent_level / 2
+            i = self.indent_level
             while i > 1:
                 i -= 1
                 if len(pos.children) == 0:
@@ -111,7 +111,7 @@ class MermaidGenerator(object):
         else:
             s = '%s%s' % (n.op, operand)
         self.nested_node_hold = last_hold_status
-        #s = self._make_node(n, s)
+        s = self._make_node(n, s)
         return s
 
     def visit_BinaryOp(self, n):
@@ -214,7 +214,7 @@ class MermaidGenerator(object):
             s = self._make_node(n, decl + knrdecls) # + body + '\n'
         else:
             s = self._make_node(n, decl) # + body + '\n'
-        self.indent_level += 2
+        self.indent_level += 1
         body = self.visit(n.body)
         return s
 
@@ -236,10 +236,10 @@ class MermaidGenerator(object):
 
     def visit_Compound(self, n):
         s = self._make_indent()  # + '{\n'
-        self.indent_level += 2
+        self.indent_level += 1
         if n.block_items:
             s += ''.join(self._generate_stmt(stmt) for stmt in n.block_items)
-        self.indent_level -= 2
+        self.indent_level -= 1
         s += self._make_indent()  # + '}\n'
         return s
 
@@ -400,11 +400,11 @@ class MermaidGenerator(object):
         if n.decls:
             #s += '\n'
             s += self._make_indent()
-            self.indent_level += 2
+            self.indent_level += 1
             s += '{' #\n'
             for decl in n.decls:
                 s += self._generate_stmt(decl)
-            self.indent_level -= 2
+            self.indent_level -= 1
             s += self._make_indent() + '}'
         return s
 
@@ -414,7 +414,7 @@ class MermaidGenerator(object):
             some statements in this context.
         """
         typ = type(n)
-        if add_indent: self.indent_level += 2
+        if add_indent: self.indent_level += 1
         indent = self._make_indent()
 
 
@@ -435,7 +435,7 @@ class MermaidGenerator(object):
             s = self.visit(n)
         else:
             s = indent + self.visit(n)# + '\n'  # + '\n'
-        if add_indent: self.indent_level -= 2
+        if add_indent: self.indent_level -= 1
         return s
 
     def _generate_decl(self, n):
