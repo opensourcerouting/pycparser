@@ -183,12 +183,12 @@ class MermaidGenerator(object):
         return s
 
     def visit_Compound(self, n):
-        s = self._make_indent() + '{\n'
+        s = self._make_indent() #+ '{\n'
         self.indent_level += 2
         if n.block_items:
             s += ''.join(self._generate_stmt(stmt) for stmt in n.block_items)
         self.indent_level -= 2
-        s += self._make_indent() + '}\n'
+        s += self._make_indent() #+ '}\n'
         return s
 
     def visit_EmptyStatement(self, n):
