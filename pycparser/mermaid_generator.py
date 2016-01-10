@@ -1,13 +1,4 @@
-#------------------------------------------------------------------------------
-# pycparser: c_generator.py
-#
-# C code generator from pycparser AST nodes.
-#
-# Copyright (C) 2008-2015, Eli Bendersky
-# License: BSD
-#------------------------------------------------------------------------------
 from . import c_ast
-
 
 class MermaidGenerator(object):
     """ Uses the same visitor pattern as c_ast.NodeVisitor, but modified to
@@ -19,16 +10,21 @@ class MermaidGenerator(object):
         # the _make_indent method
         #
         self.indent_level = 0
+        self.stmt_seq = 0
 
     def _make_indent(self):
         return ' ' * self.indent_level
 
+    def _make_seq(self, node):
+        return 'node_' + node.__class__.__name__ + '_' + str(self.stmt_seq)
+
     def visit(self, node):
+        self.stmt_seq += 1
         method = 'visit_' + node.__class__.__name__
         return getattr(self, method, self.generic_visit)(node)
 
     def generic_visit(self, node):
-        #~ print('generic:', type(node))
+        #print('generic:', type(node))
         if node is None:
             return ''
         else:
@@ -41,10 +37,7 @@ class MermaidGenerator(object):
         return n.name
 
     def visit_Pragma(self, n):
-        ret = '#pragma'
-        if n.string:
-            ret += ' ' + n.string
-        return ret
+        return ''
 
     def visit_ArrayRef(self, n):
         arrref = self._parenthesize_unless_simple(n.name)
@@ -113,10 +106,7 @@ class MermaidGenerator(object):
         return s
 
     def visit_Typedef(self, n):
-        s = ''
-        if n.storage: s += ' '.join(n.storage) + ' '
-        s += self._generate_type(n.type)
-        return s
+        return ''
 
     def visit_Cast(self, n):
         s = '(' + self._generate_type(n.to_type) + ')'
@@ -322,18 +312,17 @@ class MermaidGenerator(object):
             # These can also appear in an expression context so no semicolon
             # is added to them automatically
             #
-            #return ''
-            return indent + self.visit(n) + ';\n'
+            ret = self.visit(n)
         elif typ in (c_ast.Compound,):
             # No extra indentation required before the opening brace of a
             # compound - because it consists of multiple lines it has to
             # compute its own indentation.
             #
-            #return ''
-            return self.visit(n)
+            ret = self.visit(n)
         else:
-            return ''
-            return indent + self.visit(n) + '\n'
+            ret = self.visit(n)
+
+        return (indent if typ not in (c_ast.Compound,) else '') + self._make_seq(n) + '[' + ret + ']\n'
 
     def _generate_decl(self, n):
         """ Generation from a Decl node.
