@@ -11,12 +11,22 @@ class MermaidGenerator(object):
         #
         self.indent_level = 0
         self.stmt_seq = 0
+        self.call_stack = []
 
     def _make_indent(self):
         return ' ' * self.indent_level
 
     def _make_seq(self, node):
         return 'node_' + node.__class__.__name__ + '_' + str(self.stmt_seq)
+
+    def _make_node(self, node, content, surround='[]'):
+        return self._make_seq(node) + surround[0] + "\"" + content + "\"" + surround[1] + '\n';
+
+    def _push_call_stack(self, node):
+        self.call_stack.append(node)
+
+    def _pop_call_stack(self):
+        return self.call_stack.pop()
 
     def visit(self, node):
         self.stmt_seq += 1
@@ -49,7 +59,8 @@ class MermaidGenerator(object):
 
     def visit_FuncCall(self, n):
         fref = self._parenthesize_unless_simple(n.name)
-        return fref + '(' + self.visit(n.args) + ')'
+        ret = fref + '(' + self.visit(n.args) + ')'
+        return self._make_node(n, ret)
 
     def visit_UnaryOp(self, n):
         operand = self._parenthesize_unless_simple(n.expr)
@@ -75,7 +86,7 @@ class MermaidGenerator(object):
         rval_str = self._parenthesize_if(
                             n.rvalue,
                             lambda n: isinstance(n, c_ast.Assignment))
-        return '%s %s %s' % (self.visit(n.lvalue), n.op, rval_str)
+        return self._make_node(n, '%s %s %s' % (self.visit(n.lvalue), n.op, rval_str))
 
     def visit_IdentifierType(self, n):
         return ' '.join(n.names)
@@ -96,7 +107,7 @@ class MermaidGenerator(object):
         if n.bitsize: s += ' : ' + self.visit(n.bitsize)
         if n.init:
             s += ' = ' + self._visit_expr(n.init)
-        return s
+        return self._make_node(n, s)
 
     def visit_DeclList(self, n):
         s = self.visit(n.decls[0])
@@ -156,7 +167,7 @@ class MermaidGenerator(object):
             elif isinstance(ext, c_ast.Pragma):
                 s += self.visit(ext) + '\n'
             else:
-                s += self.visit(ext) + ';\n'
+                s += self.visit(ext) # + ';\n' # here are all the typedef's
         return s
 
     def visit_Compound(self, n):
@@ -177,13 +188,13 @@ class MermaidGenerator(object):
     def visit_Return(self, n):
         s = 'return'
         if n.expr: s += ' ' + self.visit(n.expr)
-        return s + ';'
+        return self._make_node(n, s);
 
     def visit_Break(self, n):
-        return 'break;'
+        return self._make_node(n, 'break')
 
     def visit_Continue(self, n):
-        return 'continue;'
+        return self._make_node(n, 'continue')
 
     def visit_TernaryOp(self, n):
         s = self._visit_expr(n.cond) + ' ? '
@@ -194,11 +205,12 @@ class MermaidGenerator(object):
     def visit_If(self, n):
         s = 'if ('
         if n.cond: s += self.visit(n.cond)
-        s += ')\n'
-        s += self._generate_stmt(n.iftrue, add_indent=True)
+        s += ')' #\n'
+        s = self._make_node(n, s)
+        s += self._generate_stmt(n.iftrue, add_indent=True, cond="True")
         if n.iffalse:
-            s += self._make_indent() + 'else\n'
-            s += self._generate_stmt(n.iffalse, add_indent=True)
+            s += self._make_indent()# + 'else\n'
+            s += self._generate_stmt(n.iffalse, add_indent=True, cond="False")
         return s
 
     def visit_For(self, n):
@@ -208,14 +220,16 @@ class MermaidGenerator(object):
         if n.cond: s += ' ' + self.visit(n.cond)
         s += ';'
         if n.next: s += ' ' + self.visit(n.next)
-        s += ')\n'
+        s += ')'
+        s = self._make_node(n, s)
         s += self._generate_stmt(n.stmt, add_indent=True)
         return s
 
     def visit_While(self, n):
         s = 'while ('
         if n.cond: s += self.visit(n.cond)
-        s += ')\n'
+        s += ')'
+        s = self._make_node(n, s)
         s += self._generate_stmt(n.stmt, add_indent=True)
         return s
 
@@ -294,7 +308,7 @@ class MermaidGenerator(object):
             s += self._make_indent() + '}'
         return s
 
-    def _generate_stmt(self, n, add_indent=False):
+    def _generate_stmt(self, n, add_indent=False, cond=''):
         """ Generation from a statement node. This method exists as a wrapper
             for individual visit_* methods to handle different treatment of
             some statements in this context.
@@ -313,16 +327,24 @@ class MermaidGenerator(object):
             # is added to them automatically
             #
             ret = self.visit(n)
+            # return \
+            #     ('-- %s -->' % cond) if cond != '' else '-->' + '\n' \
+            #     + indent + self._make_seq(n) + '[' + ret + ']\n'
+            return indent + ret;
         elif typ in (c_ast.Compound,):
             # No extra indentation required before the opening brace of a
             # compound - because it consists of multiple lines it has to
             # compute its own indentation.
             #
             ret = self.visit(n)
+            # return ('-- %s -->' % cond) if cond != '' else '-->' + '\n'
+            return ret;
         else:
             ret = self.visit(n)
+            # return \
+            #     indent + self._make_seq(n) + '[' + ret + ']\n'
+            return indent + ret;
 
-        return (indent if typ not in (c_ast.Compound,) else '') + self._make_seq(n) + '[' + ret + ']\n'
 
     def _generate_decl(self, n):
         """ Generation from a Decl node.
@@ -341,7 +363,7 @@ class MermaidGenerator(object):
             generation from it.
         """
         typ = type(n)
-        #~ print(n, modifiers)
+        # print(n, modifiers)
 
         if typ == c_ast.TypeDecl:
             s = ''
