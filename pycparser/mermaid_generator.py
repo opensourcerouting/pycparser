@@ -9,10 +9,9 @@ class MermaidGenerator(object):
     """
 
     class H:
-        def __init__(self, content, children=[], else_children=[]):
+        def __init__(self, content, children=[]):
             self.content = content
             self.children = list(children)
-            self.else_children = list(else_children)
 
     def __init__(self):
         # Statements start with indentation of self.indent_level spaces, using
@@ -23,7 +22,6 @@ class MermaidGenerator(object):
         self.stmt_seq = 0
         self.call_tree = self.H("root")
         self.nested_node_hold = False
-        self.is_else = False
 
     def get_call_tree(self, ast):
         self.visit(ast)
