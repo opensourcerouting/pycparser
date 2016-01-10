@@ -191,7 +191,8 @@ class MermaidGenerator(object):
             if isinstance(ext, c_ast.FuncDef):
                 s += self.visit(ext)
             elif isinstance(ext, c_ast.Pragma):
-                s += self.visit(ext) + '\n'
+                pass
+                #s += self.visit(ext) + '\n' # kill all pragmas
             else:
                 pass
                 #s += self.visit(ext) + ';\n' # here are all typedef's
