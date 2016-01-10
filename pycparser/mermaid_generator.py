@@ -236,9 +236,11 @@ class MermaidGenerator(object):
         return s
 
     def visit_If(self, n):
+        self.nested_node_hold = True
         s = 'if ('
         if n.cond: s += self.visit(n.cond)
         s += ')'  # \n'
+        self.nested_node_hold = False
         s = self._make_node(n, s)
         if_seq = self._make_seq(n)
         #if_end_seq = if_seq + "_end"
@@ -253,6 +255,7 @@ class MermaidGenerator(object):
         return s
 
     def visit_For(self, n):
+        self.nested_node_hold = True
         s = 'for ('
         if n.init: s += self.visit(n.init)
         s += ';'
@@ -260,15 +263,18 @@ class MermaidGenerator(object):
         s += ';'
         if n.next: s += ' ' + self.visit(n.next)
         s += ')'  # \n'
+        self.nested_node_hold = False
         s = self._make_node(n, s)
         s += self._generate_stmt(n.stmt, add_indent=True)
         # TODO: break for statements
         return s
 
     def visit_While(self, n):
+        self.nested_node_hold = True
         s = 'while ('
         if n.cond: s += self.visit(n.cond)
         s += ')' # \n'
+        self.nested_node_hold = False
         s = self._make_node(n, s)
         s += self._generate_stmt(n.stmt, add_indent=True)
         return s
@@ -277,21 +283,27 @@ class MermaidGenerator(object):
         s = 'do' # \n'
         s = self._make_node(n, s)
         s += self._generate_stmt(n.stmt, add_indent=True)
+        self.nested_node_hold = True
         swhile = self._make_indent() + 'while ('
         if n.cond: swhile += self.visit(n.cond)
         swhile += ');'
+        self.nested_node_hold = False
         swhile = self._make_node(n, swhile)
         s += swhile
         return s
 
     def visit_Switch(self, n):
+        self.nested_node_hold = True
         s = 'switch (' + self.visit(n.cond) + ')' # \n'
+        self.nested_node_hold = False
         s = self._make_node(n, s)
         s += self._generate_stmt(n.stmt, add_indent=True)
         return s
 
     def visit_Case(self, n):
+        self.nested_node_hold = True
         s = 'case ' + self.visit(n.expr) + ':' # \n'
+        self.nested_node_hold = False
         s = self._make_node(n, s)
         for stmt in n.stmts:
             s += self._generate_stmt(stmt, add_indent=True)
