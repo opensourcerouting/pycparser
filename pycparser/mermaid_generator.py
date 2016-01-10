@@ -1,5 +1,5 @@
 from . import c_ast
-import html
+import html, copy
 
 
 class MermaidGenerator(object):
@@ -8,6 +8,11 @@ class MermaidGenerator(object):
         generic_visit.
     """
 
+    class H:
+        def __init__(self, content, children=[]):
+            self.content = content
+            self.children = list(children)
+
     def __init__(self):
         # Statements start with indentation of self.indent_level spaces, using
         # the _make_indent method
@@ -15,8 +20,7 @@ class MermaidGenerator(object):
         self.last_indent = 0
         self.indent_level = 0
         self.stmt_seq = 0
-        self.call_stack = []
-        self.visit_stack = []
+        self.call_tree = self.H("root")
         self.nested_node_hold = False
 
     def _make_indent(self):
@@ -31,14 +35,16 @@ class MermaidGenerator(object):
         else:
             s = self._make_seq(node) + surround[0] + "\"" + html.escape(content.replace('\n', '').strip()) + "\"" + surround[
                 1] + '\n'
-            pos = self.visit_stack;
-            for i in range(int(self.indent_level / 2)-1):
-                if len(pos) == 0:
-                    pos.append([])
-                if pos[-1] is not list:
-                    pos[-1] = [pos[-1]]
-                pos = pos[-1]
-            pos.append(s)
+
+            pos = self.call_tree
+            i = self.indent_level / 2
+            while i > 1:
+                i -= 1
+                if len(pos.children) == 0:
+                    break
+                pos = pos.children[-1]
+            pos.children.append(self.H(s))
+
             return s
 
 
@@ -82,12 +88,16 @@ class MermaidGenerator(object):
         return sref + n.type + self.visit(n.field)
 
     def visit_FuncCall(self, n):
+        last_hold_status = self.nested_node_hold
+        self.nested_node_hold = True
         fref = self._parenthesize_unless_simple(n.name)
         s = fref + '(' + self.visit(n.args) + ')'
+        self.nested_node_hold = last_hold_status
         s = self._make_node(n, s)
         return s
 
     def visit_UnaryOp(self, n):
+        last_hold_status = self.nested_node_hold
         self.nested_node_hold = True
         operand = self._parenthesize_unless_simple(n.expr)
         if n.op == 'p++':
@@ -100,28 +110,30 @@ class MermaidGenerator(object):
             s = 'sizeof(%s)' % self.visit(n.expr)
         else:
             s = '%s%s' % (n.op, operand)
-        self.nested_node_hold = False
+        self.nested_node_hold = last_hold_status
         #s = self._make_node(n, s)
         return s
 
     def visit_BinaryOp(self, n):
+        last_hold_status = self.nested_node_hold
         self.nested_node_hold = True
         lval_str = self._parenthesize_if(n.left,
                                          lambda d: not self._is_simple_node(d))
         rval_str = self._parenthesize_if(n.right,
                                          lambda d: not self._is_simple_node(d))
         s = '%s %s %s' % (lval_str, n.op, rval_str)
-        self.nested_node_hold = False
+        self.nested_node_hold = last_hold_status
         #s = self._make_node(n, s)
         return s
 
     def visit_Assignment(self, n):
+        last_hold_status = self.nested_node_hold
         self.nested_node_hold = True
         rval_str = self._parenthesize_if(
                 n.rvalue,
                 lambda n: isinstance(n, c_ast.Assignment))
         s = '%s %s %s' % (self.visit(n.lvalue), n.op, rval_str)
-        self.nested_node_hold = False
+        self.nested_node_hold = last_hold_status
         s = self._make_node(n, s)
         return s
 
@@ -192,9 +204,10 @@ class MermaidGenerator(object):
 
     def visit_FuncDef(self, n):
         self.indent_level = 0
+        last_hold_status = self.nested_node_hold
         self.nested_node_hold = True
         decl = self.visit(n.decl)
-        self.nested_node_hold = False
+        self.nested_node_hold = last_hold_status
 
         if n.param_decls:
             knrdecls = ';\n'.join(self.visit(p) for p in n.param_decls)
@@ -260,25 +273,21 @@ class MermaidGenerator(object):
         return s
 
     def visit_If(self, n):
+        last_hold_status = self.nested_node_hold
         self.nested_node_hold = True
         s = 'if ('
         if n.cond: s += self.visit(n.cond)
         s += ')'  # \n'
-        self.nested_node_hold = False
+        self.nested_node_hold = last_hold_status
         s = self._make_node(n, s)
         if_seq = self._make_seq(n)
-        #if_end_seq = if_seq + "_end"
-        #s += if_seq + " -- true --> "
         s += self._generate_stmt(n.iftrue, add_indent=True)
-        #s += " --> " + if_end_seq
         if n.iffalse:
-            #s += if_seq + " -- false --> "
-            #s += self._make_indent() + 'else\n'
             s += self._generate_stmt(n.iffalse, add_indent=True)
-            #s += " --> " + if_end_seq
         return s
 
     def visit_For(self, n):
+        last_hold_status = self.nested_node_hold
         self.nested_node_hold = True
         s = 'for ('
         if n.init: s += self.visit(n.init)
@@ -287,18 +296,19 @@ class MermaidGenerator(object):
         s += ';'
         if n.next: s += ' ' + self.visit(n.next)
         s += ')'  # \n'
-        self.nested_node_hold = False
+        self.nested_node_hold = last_hold_status
         s = self._make_node(n, s)
         s += self._generate_stmt(n.stmt, add_indent=True)
         # TODO: break for statements
         return s
 
     def visit_While(self, n):
+        last_hold_status = self.nested_node_hold
         self.nested_node_hold = True
         s = 'while ('
         if n.cond: s += self.visit(n.cond)
         s += ')' # \n'
-        self.nested_node_hold = False
+        self.nested_node_hold = last_hold_status
         s = self._make_node(n, s)
         s += self._generate_stmt(n.stmt, add_indent=True)
         return s
@@ -307,27 +317,30 @@ class MermaidGenerator(object):
         s = 'do' # \n'
         s = self._make_node(n, s)
         s += self._generate_stmt(n.stmt, add_indent=True)
+        last_hold_status = self.nested_node_hold
         self.nested_node_hold = True
         swhile = self._make_indent() + 'while ('
         if n.cond: swhile += self.visit(n.cond)
         swhile += ');'
-        self.nested_node_hold = False
+        self.nested_node_hold = last_hold_status
         swhile = self._make_node(n, swhile)
         s += swhile
         return s
 
     def visit_Switch(self, n):
+        last_hold_status = self.nested_node_hold
         self.nested_node_hold = True
         s = 'switch (' + self.visit(n.cond) + ')' # \n'
-        self.nested_node_hold = False
+        self.nested_node_hold = last_hold_status
         s = self._make_node(n, s)
         s += self._generate_stmt(n.stmt, add_indent=True)
         return s
 
     def visit_Case(self, n):
+        last_hold_status = self.nested_node_hold
         self.nested_node_hold = True
         s = 'case ' + self.visit(n.expr) + ':' # \n'
-        self.nested_node_hold = False
+        self.nested_node_hold = last_hold_status
         s = self._make_node(n, s)
         for stmt in n.stmts:
             s += self._generate_stmt(stmt, add_indent=True)
@@ -403,7 +416,7 @@ class MermaidGenerator(object):
         typ = type(n)
         if add_indent: self.indent_level += 2
         indent = self._make_indent()
-        if add_indent: self.indent_level -= 2
+
 
         if typ in (
                 c_ast.Decl, c_ast.Assignment, c_ast.Cast, c_ast.UnaryOp,
@@ -413,15 +426,17 @@ class MermaidGenerator(object):
             # These can also appear in an expression context so no semicolon
             # is added to them automatically
             #
-            return indent + self.visit(n)# + '\n'   # + ';\n'
+            s = indent + self.visit(n)# + '\n'   # + ';\n'
         elif typ in (c_ast.Compound,):
             # No extra indentation required before the opening brace of a
             # compound - because it consists of multiple lines it has to
             # compute its own indentation.
             #
-            return self.visit(n)
+            s = self.visit(n)
         else:
-            return indent + self.visit(n)# + '\n'  # + '\n'
+            s = indent + self.visit(n)# + '\n'  # + '\n'
+        if add_indent: self.indent_level -= 2
+        return s
 
     def _generate_decl(self, n):
         """ Generation from a Decl node.
