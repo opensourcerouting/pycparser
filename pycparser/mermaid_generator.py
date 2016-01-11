@@ -9,11 +9,12 @@ class MermaidGenerator(object):
     """
 
     class H:
-        def __init__(self, content, type="", children=[]):
+        def __init__(self, content, type="", children=[], surround="[]"):
             self.content = content
             self.type = type
             self.children = list(children)
             self.if_end = []
+            self.surround = surround
 
     def __init__(self):
         # Statements start with indentation of self.indent_level spaces, using
@@ -50,7 +51,7 @@ class MermaidGenerator(object):
                     break
                 pos = pos.children[-1]
             if type=="": type = node.__class__.__name__
-            pos.children.append(self.H(s, type=type))
+            pos.children.append(self.H(s, type=type, surround=surround))
 
             return s
 
