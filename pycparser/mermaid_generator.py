@@ -447,15 +447,18 @@ class MermaidGenerator(object):
             # is added to them automatically
             #
             s = indent + self.visit(n)# + '\n'   # + ';\n'
+            if add_indent: self.indent_level -= 1
         elif typ in (c_ast.Compound,):
             # No extra indentation required before the opening brace of a
             # compound - because it consists of multiple lines it has to
             # compute its own indentation.
             #
+            if add_indent: self.indent_level -=1
             s = self.visit(n)
         else:
             s = indent + self.visit(n)# + '\n'  # + '\n'
-        if add_indent: self.indent_level -= 1
+            if add_indent: self.indent_level -= 1
+
         return s
 
     def _generate_decl(self, n):
