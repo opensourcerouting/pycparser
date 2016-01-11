@@ -33,14 +33,15 @@ class MermaidGenerator(object):
     def _make_indent(self):
         return ' ' * self.indent_level
 
-    def _make_seq(self, node):
-        return 'node_' + node.__class__.__name__ + '_' + str(self.stmt_seq)
+    def _make_seq(self, node, type=None):
+        if type==None: type=node.__class__.__name__
+        return 'node_' + type + '_' + str(self.stmt_seq)
 
-    def _make_node(self, node, content, type="", surround='[]'):
+    def _make_node(self, node, content, type=None, surround='[]'):
         if self.nested_node_hold:
             return content.replace('\n', '').strip()
         else:
-            s = self._make_seq(node) + surround[0] + "\"" + html.escape(content.replace('\n', '').strip()) + "\"" + surround[
+            s = self._make_seq(node, type=type) + surround[0] + "\"" + html.escape(content.replace('\n', '').strip()) + "\"" + surround[
                 1] + '\n'
 
             pos = self.call_tree
@@ -50,7 +51,7 @@ class MermaidGenerator(object):
                 if len(pos.children) == 0:
                     break
                 pos = pos.children[-1]
-            if type=="": type = node.__class__.__name__
+            if type==None: type = node.__class__.__name__
             pos.children.append(self.H(s, type=type, surround=surround))
 
             return s
@@ -329,16 +330,18 @@ class MermaidGenerator(object):
 
     def visit_DoWhile(self, n):
         s = 'do' # \n'
-        s = self._make_node(n, s)
+        s = self._make_node(n, s, type="DoWhile_Do")
         s += self._generate_stmt(n.stmt, add_indent=True)
         last_hold_status = self.nested_node_hold
         self.nested_node_hold = True
+        self.indent_level += 1
         swhile = self._make_indent() + 'while ('
         if n.cond: swhile += self.visit(n.cond)
         swhile += ');'
         self.nested_node_hold = last_hold_status
-        swhile = self._make_node(n, swhile)
+        swhile = self._make_node(n, swhile, type="DoWhile_While")
         s += swhile
+        self.indent_level -= 1
         return s
 
     def visit_Switch(self, n):
