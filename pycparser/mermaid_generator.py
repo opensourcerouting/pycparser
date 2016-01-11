@@ -215,9 +215,9 @@ class MermaidGenerator(object):
 
         if n.param_decls:
             knrdecls = ';\n'.join(self.visit(p) for p in n.param_decls)
-            s = self._make_node(n, decl + knrdecls) # + body + '\n'
+            s = self._make_node(n, decl + knrdecls, surround="()") # + body + '\n'
         else:
-            s = self._make_node(n, decl) # + body + '\n'
+            s = self._make_node(n, decl, surround="()") # + body + '\n'
         self.indent_level += 1
         body = self.visit(n.body)
         return s
@@ -283,7 +283,7 @@ class MermaidGenerator(object):
         if n.cond: s += self.visit(n.cond)
         s += ')'  # \n'
         self.nested_node_hold = last_hold_status
-        s = self._make_node(n, s)
+        s = self._make_node(n, s, surround="{}")
         #if_seq = self._make_seq(n)
         self.indent_level += 1
         self._make_node(n, "If-True")
