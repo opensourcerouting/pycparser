@@ -15,6 +15,8 @@ class MermaidGenerator(object):
             self.children = list(children)
             self.if_end = []
             self.surround = surround
+            self.end_id = None
+            self.end_content = None
 
     def __init__(self):
         # Statements start with indentation of self.indent_level spaces, using
@@ -25,6 +27,7 @@ class MermaidGenerator(object):
         self.stmt_seq = 0
         self.call_tree = self.H("root", type="root")
         self.nested_node_hold = False
+
 
     def get_call_tree(self, ast):
         self.visit(ast)
@@ -312,7 +315,7 @@ class MermaidGenerator(object):
         if n.next: s += ' ' + self.visit(n.next)
         s += ')'  # \n'
         self.nested_node_hold = last_hold_status
-        s = self._make_node(n, s)
+        s = self._make_node(n, s, surround="{}")
         s += self._generate_stmt(n.stmt, add_indent=True)
         # TODO: break for statements
         return s
@@ -324,7 +327,7 @@ class MermaidGenerator(object):
         if n.cond: s += self.visit(n.cond)
         s += ')' # \n'
         self.nested_node_hold = last_hold_status
-        s = self._make_node(n, s)
+        s = self._make_node(n, s, surround="{}")
         s += self._generate_stmt(n.stmt, add_indent=True)
         return s
 
@@ -339,7 +342,7 @@ class MermaidGenerator(object):
         if n.cond: swhile += self.visit(n.cond)
         swhile += ');'
         self.nested_node_hold = last_hold_status
-        swhile = self._make_node(n, swhile, type="DoWhile_While")
+        swhile = self._make_node(n, swhile, type="DoWhile_While", surround="{}")
         s += swhile
         self.indent_level -= 1
         return s
