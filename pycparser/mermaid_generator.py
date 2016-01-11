@@ -9,9 +9,11 @@ class MermaidGenerator(object):
     """
 
     class H:
-        def __init__(self, content, children=[]):
+        def __init__(self, content, type="", children=[]):
             self.content = content
+            self.type = type
             self.children = list(children)
+            self.if_end = []
 
     def __init__(self):
         # Statements start with indentation of self.indent_level spaces, using
@@ -20,7 +22,7 @@ class MermaidGenerator(object):
         self.last_indent = 0
         self.indent_level = 0
         self.stmt_seq = 0
-        self.call_tree = self.H("root")
+        self.call_tree = self.H("root", type="root")
         self.nested_node_hold = False
 
     def get_call_tree(self, ast):
@@ -33,7 +35,7 @@ class MermaidGenerator(object):
     def _make_seq(self, node):
         return 'node_' + node.__class__.__name__ + '_' + str(self.stmt_seq)
 
-    def _make_node(self, node, content, surround='[]'):
+    def _make_node(self, node, content, type="", surround='[]'):
         if self.nested_node_hold:
             return content.replace('\n', '').strip()
         else:
@@ -47,7 +49,8 @@ class MermaidGenerator(object):
                 if len(pos.children) == 0:
                     break
                 pos = pos.children[-1]
-            pos.children.append(self.H(s))
+            if type=="": type = node.__class__.__name__
+            pos.children.append(self.H(s, type=type))
 
             return s
 
@@ -286,12 +289,12 @@ class MermaidGenerator(object):
         s = self._make_node(n, s, surround="{}")
         #if_seq = self._make_seq(n)
         self.indent_level += 1
-        self._make_node(n, "If-True")
+        self._make_node(n, "If-True", type="If-True")
         s += self._generate_stmt(n.iftrue, add_indent=True)
         self.indent_level -= 1
         if n.iffalse:
             self.indent_level += 1
-            self._make_node(n, "If-False")
+            self._make_node(n, "If-False", type="If-False")
             s += self._generate_stmt(n.iffalse, add_indent=True)
             self.indent_level -= 1
         return s
